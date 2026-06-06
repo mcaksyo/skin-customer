@@ -1,0 +1,36 @@
+{
+  "name": "Minecraft Skin Editor",
+  "short_name": "SkinEditor",
+  "description": "Создавай и редактируй скины Minecraft прямо в Telegram!",
+  "version": "1.0.0",
+  "start_url": "telegram_skin_editor.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#007AFF",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png", 
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "telegram": {
+    "bot_username": "minecraft_skin_editor_bot",
+    "web_app_url": "https://your-domain.com/telegram_skin_editor.html",
+    "short_description": "Редактор скинов Minecraft",
+    "description": "Полнофункциональный редактор скинов Minecraft с поддержкой всех частей тела, 3D превью и удобным интерфейсом",
+    "features": [
+      "Редактирование всех частей скина",
+      "Поддержка 64x64 и 1024x1024 скинов", 
+      "3D превью скина",
+      "Быстрый выбор слоев",
+      "Адаптивный интерфейс",
+      "Сохранение и загрузка скинов"
+    ]
+  }
+}

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Skin Editor</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            padding: 10px;
+            user-select: none;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 12px;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
+        .tabs {
+            display: flex;
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 12px;
+            margin-bottom: 15px;
+            padding: 4px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .tab.active {
+            background: var(--tg-theme-button-color, #007AFF);
+            color: var(--tg-theme-button-text-color, #ffffff);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .canvas-container {
+            text-align: center;
+            margin-bottom: 20px;
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 12px;
+            padding: 15px;
+        }
+
+        #skinCanvas {
+            border: 2px solid var(--tg-theme-hint-color, #999999);
+            border-radius: 8px;
+            background: white;
+            max-width: 100%;
+            height: auto;
+        }
+
+        .controls {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .control-group {
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 12px;
+            padding: 15px;
+        }
+
+        .control-group h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: var(--tg-theme-text-color, #000000);
+        }
+
+        .button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: var(--tg-theme-button-color, #007AFF);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            font-size: 14px;
+            cursor: pointer;
+            margin-bottom: 8px;
+            transition: opacity 0.3s;
+        }
+
+        .button:hover {
+            opacity: 0.8;
+        }
+
+        .button:last-child {
+            margin-bottom: 0;
+        }
+
+        .button.secondary {
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            color: var(--tg-theme-text-color, #000000);
+            border: 1px solid var(--tg-theme-hint-color, #999999);
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .parts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .parts-categories {
+            margin-top: 10px;
+        }
+
+        .category {
+            margin-bottom: 15px;
+            border: 1px solid var(--tg-theme-hint-color, #999999);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .category-header {
+            background: var(--tg-theme-button-color, #007AFF);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            padding: 8px 12px;
+            font-weight: bold;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .category-header:hover {
+            opacity: 0.9;
+        }
+
+        .category-content {
+            display: none;
+            padding: 8px;
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+        }
+
+        .category-content.expanded {
+            display: block;
+        }
+
+        .category-parts {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+        }
+
+        .quick-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .quick-buttons .button {
+            margin-bottom: 0;
+        }
+
+        .part-button {
+            padding: 8px;
+            border: 1px solid var(--tg-theme-hint-color, #999999);
+            border-radius: 6px;
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            color: var(--tg-theme-text-color, #000000);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .part-button.selected {
+            background: var(--tg-theme-button-color, #007AFF);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border-color: var(--tg-theme-button-color, #007AFF);
+        }
+
+        .size-selector {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .size-option {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid var(--tg-theme-hint-color, #999999);
+            border-radius: 6px;
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            color: var(--tg-theme-text-color, #000000);
+            text-align: center;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .size-option.selected {
+            background: var(--tg-theme-button-color, #007AFF);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border-color: var(--tg-theme-button-color, #007AFF);
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .mode-option {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid var(--tg-theme-hint-color, #999999);
+            border-radius: 6px;
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            color: var(--tg-theme-text-color, #000000);
+            text-align: center;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .mode-option.selected {
+            background: var(--tg-theme-button-color, #007AFF);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border-color: var(--tg-theme-button-color, #007AFF);
+        }
+
+        .selection-info {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        .preview-container {
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        .preview-controls {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .preview-controls .button {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        #skin-container {
+            position: relative;
+            overflow: hidden;
+        }
+
+        #previewCanvas {
+            border: 1px solid var(--tg-theme-hint-color, #999999);
+            border-radius: 8px;
+            background: linear-gradient(45deg, #f0f0f0 25%, transparent 25%), 
+                        linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), 
+                        linear-gradient(45deg, transparent 75%, #f0f0f0 75%), 
+                        linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            max-width: 100%;
+            height: auto;
+        }
+
+        @media (max-width: 480px) {
+            .parts-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .header h1 {
+                font-size: 18px;
+            }
+            
+            .tab {
+                font-size: 12px;
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎮 Minecraft Skin Editor</h1>
+            <p>Создавай и редактируй скины прямо в Telegram!</p>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('editor')">Редактор</div>
+            <div class="tab" onclick="switchTab('parts')">Части</div>
+            <div class="tab" onclick="switchTab('preview')">Превью</div>
+        </div>
+
+        <!-- Вкладка редактора -->
+        <div id="editor" class="tab-content active">
+            <div class="canvas-container">
+                <canvas id="skinCanvas" width="320" height="320"></canvas>
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <h3>📁 Файлы</h3>
+                    <button class="button" onclick="loadSkin()">Загрузить скин</button>
+                    <button class="button secondary" onclick="saveSkin()">Сохранить скин</button>
+                    <button class="button secondary" onclick="createNewSkin()">Новый скин</button>
+                    <input type="file" id="skinFileInput" class="file-input" accept="image/*" onchange="handleSkinLoad(event)">
+                </div>
+
+                <div class="control-group">
+                    <h3>🎭 Режим</h3>
+                    <div class="mode-selector">
+                        <div class="mode-option selected" onclick="selectWorkMode('skin')">Скин</div>
+                        <div class="mode-option" onclick="selectWorkMode('cape')">Плащ</div>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3>📏 Размер</h3>
+                    <div class="size-selector">
+                        <div class="size-option selected" onclick="selectSize('64')">64x64</div>
+                        <div class="size-option" onclick="selectSize('1024')">1024x1024</div>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3>🎨 Изображения</h3>
+                    <button class="button" onclick="loadImage()">Добавить изображение</button>
+                    <button class="button secondary" onclick="clearSelected()">Очистить выбранное</button>
+                    <input type="file" id="imageFileInput" class="file-input" accept="image/*" onchange="handleImageLoad(event)">
+                </div>
+            </div>
+        </div>
+
+        <!-- Вкладка частей -->
+        <div id="parts" class="tab-content">
+            <div class="control-group">
+                <h3>🎯 Быстрый выбор</h3>
+                <div class="quick-buttons">
+                    <button class="button" onclick="selectAllParts()">Все части</button>
+                    <button class="button" onclick="selectMainLayer()">Основной слой</button>
+                    <button class="button" onclick="selectOverlayLayer()">Второй слой</button>
+                    <button class="button secondary" onclick="clearSelection()">Очистить</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>🧩 Части тела</h3>
+                <div class="parts-categories" id="partsCategories">
+                    <!-- Категории будут добавлены динамически -->
+                </div>
+                <div class="selection-info" id="selectionInfo">Выбрано: 0 частей</div>
+            </div>
+
+            <div class="control-group">
+                <h3>⚙️ Режим применения</h3>
+                <div class="mode-selector">
+                    <div class="mode-option selected" onclick="selectMode('individual')">Отдельно</div>
+                    <div class="mode-option" onclick="selectMode('stretch')">Растянуть</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Вкладка превью -->
+        <div id="preview" class="tab-content">
+            <div class="control-group">
+                <h3>👁️ 3D Превью</h3>
+                <button class="button" onclick="generate3DPreview()">Обновить превью</button>
+                <div class="preview-container">
+                    <canvas id="previewCanvas" width="280" height="320"></canvas>
+                </div>
+                <div class="preview-controls">
+                    <button class="button secondary" onclick="rotatePreview()">Повернуть</button>
+                    <button class="button secondary" onclick="resetPreview()">Сброс</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="telegram_skin_editor.js"></script>
+</body>
+</html>
