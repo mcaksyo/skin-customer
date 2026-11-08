@@ -6,460 +6,280 @@
     <title>Minecraft Skin Editor</title>
     <script defer src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            color-scheme: dark;
+            --bg: #10151b;
+            --panel: #191f28;
+            --inset: #121820;
+            --border: #303a47;
+            --text: #f1f5f9;
+            --muted: #aab7c8;
+            --accent: #a8ec88;
+            --on-accent: #172616;
         }
 
+        * { box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--tg-theme-bg-color, #ffffff);
-            color: var(--tg-theme-text-color, #000000);
-            padding: 10px;
-            user-select: none;
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font: 15px/1.5 system-ui, sans-serif;
         }
 
-        .container {
-            max-width: 920px;
-            margin: 0 auto;
+        .container { width: min(1120px, calc(100% - 40px)); margin: 36px auto; }
+        .header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+        .brand-icon {
+            display: grid;
+            place-items: center;
+            flex: 0 0 52px;
+            height: 52px;
+            color: var(--on-accent);
+            background: var(--accent);
+            border-radius: 14px;
         }
 
-        .header {
-            text-align: center;
-            margin-bottom: 20px;
-            padding: 10px;
-            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
-            border-radius: 12px;
-        }
+        h1, h2, h3, p { margin: 0; }
+        h1 { font-size: clamp(22px, 4vw, 30px); line-height: 1.2; }
+        h2 { font-size: 19px; }
+        h3 { font-size: 15px; }
+        .hint, .header p { color: var(--muted); font-size: 13px; margin-top: 4px; }
 
-        .header h1 {
-            font-size: 20px;
-            margin-bottom: 5px;
-        }
-
-        .header p {
+        button {
+            min-height: 42px;
+            padding: 8px 13px;
+            border: 1px solid var(--border);
+            border-radius: 9px;
+            color: var(--text);
+            background: var(--inset);
+            font: inherit;
             font-size: 14px;
-            opacity: 0.7;
-        }
-
-        .tabs {
-            display: flex;
-            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
-            border-radius: 12px;
-            margin-bottom: 15px;
-            padding: 4px;
-        }
-
-        .tab {
-            flex: 1;
-            padding: 10px;
-            text-align: center;
-            border-radius: 8px;
             cursor: pointer;
-            transition: all 0.3s;
-            font-size: 14px;
         }
 
-        .tab.active {
-            background: var(--tg-theme-button-color, #007AFF);
-            color: var(--tg-theme-button-text-color, #ffffff);
+        button:hover:not(:disabled) { border-color: var(--accent); }
+        button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+        button:disabled { opacity: .45; cursor: default; }
+        .button.primary, .tab.active, button.selected {
+            background: var(--accent);
+            color: var(--on-accent);
+            border-color: var(--accent);
+            font-weight: 650;
         }
 
-        .tab-content {
-            display: none;
+        .tabs, .actions, .mode-selector, .size-selector, .quick-buttons, .preview-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
         }
 
-        .tab-content.active {
-            display: block;
+        .tabs { padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+        .tab { background: transparent; border-color: transparent; }
+        #status { color: var(--muted); font-size: 13px; margin: 12px 0; min-height: 20px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        #editor.active { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; }
+        .controls { display: grid; align-content: start; gap: 12px; }
+        .control-group, .workspace {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 18px;
         }
 
-        .canvas-container {
-            text-align: center;
-            margin-bottom: 20px;
-            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+        .control-group h2, .control-group h3 { margin-bottom: 8px; }
+        .workspace { align-self: start; }
+        .workspace-heading { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+        .canvas-container, .preview-container {
+            display: grid;
+            place-items: center;
+            padding: 18px;
+            margin: 16px 0;
+            min-width: 0;
+            border: 1px solid var(--border);
             border-radius: 12px;
-            padding: 15px;
+            background: var(--inset);
         }
 
-        #skinCanvas {
-            border: 2px solid var(--tg-theme-hint-color, #999999);
-            border-radius: 8px;
-            background: repeating-conic-gradient(#fff 0% 25%, #e5e7eb 0% 50%) 0 0 / 16px 16px;
+        canvas {
+            display: block;
             max-width: 100%;
             height: auto;
+            image-rendering: pixelated;
+            background: repeating-conic-gradient(#303a47 0% 25%, #242d38 0% 50%) 0 0 / 20px 20px;
         }
 
-        .controls {
-            display: grid;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
-        .control-group {
-            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
-            border-radius: 12px;
-            padding: 15px;
-        }
-
-        .control-group h3 {
-            font-size: 16px;
-            margin-bottom: 10px;
-            color: var(--tg-theme-text-color, #000000);
-        }
-
-        .button {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            background: var(--tg-theme-button-color, #007AFF);
-            color: var(--tg-theme-button-text-color, #ffffff);
-            font-size: 14px;
-            cursor: pointer;
-            margin-bottom: 8px;
-            transition: opacity 0.3s;
-        }
-
-        .button:hover {
-            opacity: 0.8;
-        }
-
-        .button:last-child {
-            margin-bottom: 0;
-        }
-
-        .button.secondary {
-            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
-            color: var(--tg-theme-text-color, #000000);
-            border: 1px solid var(--tg-theme-hint-color, #999999);
-        }
-
-        .file-input {
-            display: none;
-        }
-
-        .parts-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 8px;
-            margin-top: 10px;
-        }
-
-        .parts-categories {
-            margin-top: 10px;
-        }
-
-        .category {
-            margin-bottom: 15px;
-            border: 1px solid var(--tg-theme-hint-color, #999999);
-            border-radius: 8px;
-            overflow: hidden;
-        }
-
+        canvas[hidden] { display: none; }
+        #skinCanvas { width: 400px; cursor: crosshair; }
+        .editor-options { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+        .editor-options label { color: var(--muted); }
+        input[type=checkbox] { accent-color: var(--accent); }
+        .selection-info { color: var(--accent); font-size: 13px; font-weight: 650; }
+        .file-input { display: none; }
+        .texture-settings { display: flex; flex-wrap: wrap; gap: 14px 20px; }
+        .apply-settings { margin: 12px 0; }
+        .actions { margin-top: 10px; }
+        .extra-actions { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+        summary { cursor: pointer; font-weight: 650; }
+        .parts-categories { display: grid; gap: 8px; margin-top: 16px; }
+        .category { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
         .category-header {
-            background: var(--tg-theme-button-color, #007AFF);
-            color: var(--tg-theme-button-text-color, #ffffff);
-            padding: 8px 12px;
-            font-weight: bold;
-            font-size: 13px;
+            padding: 10px 12px;
+            background: var(--inset);
             cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
         }
 
-        .category-header:hover {
-            opacity: 0.9;
+        .category-content { padding: 10px; }
+        .category-parts { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 8px; }
+        .preview-container { min-height: 320px; }
+        .preview-controls { justify-content: center; align-items: center; }
+
+        @media (max-width: 720px) {
+            .container { width: calc(100% - 24px); margin: 18px auto; }
+            #editor.active { grid-template-columns: minmax(0, 1fr); }
+            .control-group, .workspace { padding: 14px; }
+            .canvas-container { padding: 12px; }
         }
 
-        .category-content {
-            display: none;
-            padding: 8px;
-            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
-        }
-
-        .category-content.expanded {
-            display: block;
-        }
-
-        .category-parts {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 6px;
-        }
-
-        .quick-buttons {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-        }
-
-        .quick-buttons .button {
-            margin-bottom: 0;
-        }
-
-        .part-button {
-            padding: 8px;
-            border: 1px solid var(--tg-theme-hint-color, #999999);
-            border-radius: 6px;
-            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
-            color: var(--tg-theme-text-color, #000000);
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .part-button.selected {
-            background: var(--tg-theme-button-color, #007AFF);
-            color: var(--tg-theme-button-text-color, #ffffff);
-            border-color: var(--tg-theme-button-color, #007AFF);
-        }
-
-        .size-selector {
-            display: flex;
-            gap: 8px;
-            margin-top: 10px;
-        }
-
-        .size-option {
-            flex: 1;
-            padding: 8px;
-            border: 1px solid var(--tg-theme-hint-color, #999999);
-            border-radius: 6px;
-            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
-            color: var(--tg-theme-text-color, #000000);
-            text-align: center;
-            cursor: pointer;
-            font-size: 12px;
-        }
-
-        .size-option.selected {
-            background: var(--tg-theme-button-color, #007AFF);
-            color: var(--tg-theme-button-text-color, #ffffff);
-            border-color: var(--tg-theme-button-color, #007AFF);
-        }
-
-        .mode-selector {
-            display: flex;
-            gap: 8px;
-            margin-top: 10px;
-        }
-
-        .mode-option {
-            flex: 1;
-            padding: 8px;
-            border: 1px solid var(--tg-theme-hint-color, #999999);
-            border-radius: 6px;
-            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
-            color: var(--tg-theme-text-color, #000000);
-            text-align: center;
-            cursor: pointer;
-            font-size: 12px;
-        }
-
-        .mode-option.selected {
-            background: var(--tg-theme-button-color, #007AFF);
-            color: var(--tg-theme-button-text-color, #ffffff);
-            border-color: var(--tg-theme-button-color, #007AFF);
-        }
-
-        .selection-info {
-            text-align: center;
-            margin-top: 10px;
-            font-size: 12px;
-            opacity: 0.7;
-        }
-
-        .preview-container {
-            text-align: center;
-            margin-top: 15px;
-        }
-
-        .preview-controls {
-            display: flex;
-            gap: 8px;
-            margin-top: 10px;
-        }
-
-        .preview-controls .button {
-            flex: 1;
-            margin-bottom: 0;
-        }
-
-        #skin-container {
-            position: relative;
-            overflow: hidden;
-        }
-
-        #previewCanvas {
-            border: 1px solid var(--tg-theme-hint-color, #999999);
-            border-radius: 8px;
-            background: linear-gradient(45deg, #f0f0f0 25%, transparent 25%), 
-                        linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), 
-                        linear-gradient(45deg, transparent 75%, #f0f0f0 75%), 
-                        linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
-            background-size: 20px 20px;
-            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
-            max-width: 100%;
-            height: auto;
-        }
-
-        #status, .editor-options {
-            margin: 10px 0;
-            font-size: 14px;
-        }
-
-        .tab, .mode-option, .size-option {
-            font-family: inherit;
-            color: inherit;
-        }
-
-        .tab {
-            border: 0;
-            background: transparent;
-        }
-
-        @media (min-width: 680px) {
-            .controls {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-        }
-
-        .button:disabled {
-            opacity: 0.45;
-            cursor: default;
-        }
-
-        #skinCanvas {
-            cursor: crosshair;
-        }
-
-        @media (max-width: 480px) {
-            .parts-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-            
-            .header h1 {
-                font-size: 18px;
-            }
-            
-            .tab {
-                font-size: 12px;
-                padding: 8px;
-            }
+        @media (max-width: 380px) {
+            .workspace-heading { flex-wrap: wrap; }
+            .tab { flex: 1; padding-inline: 6px; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🎮 Minecraft Skin Editor</h1>
-            <p>Редактор текстур для скинов и плащей</p>
-        </div>
+    <main class="container">
+        <header class="header">
+            <span class="brand-icon" aria-hidden="true">
+                <svg width="26" height="26" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M1 2h5v5H1zm9 0h5v5h-5zM6 7h4v2h3v5h-3v-2H6v2H3V9h3z"/>
+                </svg>
+            </span>
+            <div>
+                <h1>Редактор скинов Minecraft</h1>
+                <p>Соберите скин или плащ из своих изображений.</p>
+            </div>
+        </header>
 
-        <div class="tabs">
+        <nav class="tabs" aria-label="Разделы редактора">
             <button type="button" class="tab active" onclick="switchTab('editor')">Редактор</button>
-            <button type="button" class="tab" onclick="switchTab('parts')">Части</button>
-            <button type="button" class="tab" onclick="switchTab('preview')">Превью</button>
-        </div>
+            <button type="button" class="tab" onclick="switchTab('parts')">Грани</button>
+            <button type="button" class="tab" onclick="switchTab('preview')">3D-просмотр</button>
+        </nav>
+        <p id="status" role="status">Выберите грани и добавьте изображение.</p>
 
-        <p id="status" role="status" aria-live="polite">Выберите грань на развёртке или во вкладке «Части».</p>
-
-        <!-- Вкладка редактора -->
-        <div id="editor" class="tab-content active">
-            <div class="canvas-container">
-                <canvas id="skinCanvas" width="320" height="320"></canvas>
+        <section id="editor" class="tab-content active">
+            <div class="workspace">
+                <div class="workspace-heading">
+                    <div>
+                        <h2>Развёртка</h2>
+                        <p class="hint">Нажмите на грань, чтобы выбрать её.</p>
+                    </div>
+                    <span class="selection-info" id="editorSelection">Выбрано: 0</span>
+                </div>
+                <div class="canvas-container">
+                    <canvas id="skinCanvas" width="320" height="320" aria-label="Развёртка текстуры"></canvas>
+                </div>
+                <div class="editor-options">
+                    <label><input type="checkbox" id="showGrid" checked onchange="skinEditor.updateDisplay()"> Сетка</label>
+                    <button type="button" onclick="switchTab('parts')">Выбрать по списку</button>
+                </div>
             </div>
 
-            <div class="editor-options">
-                <label><input type="checkbox" id="showGrid" checked onchange="skinEditor.updateDisplay()"> Показывать сетку</label>
-                <p>Нажмите на грань развёртки, чтобы выбрать её.</p>
-            </div>
             <div class="controls">
+                <div class="control-group texture-settings">
+                    <div>
+                        <h3>Тип текстуры</h3>
+                        <div class="mode-selector">
+                            <button type="button" class="mode-option selected" data-work-mode="skin" onclick="selectWorkMode('skin')">Скин</button>
+                            <button type="button" class="mode-option" data-work-mode="cape" onclick="selectWorkMode('cape')">Плащ</button>
+                        </div>
+                    </div>
+                    <div>
+                        <h3>Размер</h3>
+                        <div class="size-selector">
+                            <button type="button" class="size-option selected" data-size="64" onclick="selectSize(64)">64×64</button>
+                            <button type="button" class="size-option" data-size="1024" onclick="selectSize(1024)">1024×1024</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="control-group">
-                    <h3>📁 Файлы</h3>
-                    <button class="button" id="loadButton" onclick="loadSkin()">Загрузить скин</button>
-                    <button class="button secondary" id="saveButton" onclick="saveSkin()">Сохранить скин</button>
-                    <button class="button secondary" id="newButton" onclick="createNewSkin()">Новый скин</button>
+                    <h3>Изображение для выбранных граней</h3>
+                    <div class="apply-settings">
+                        <div class="mode-selector">
+                            <button type="button" class="mode-option selected" data-apply-mode="individual" onclick="selectMode('individual')">На каждую грань</button>
+                            <button type="button" class="mode-option" data-apply-mode="stretch" onclick="selectMode('stretch')">На весь выбор</button>
+                        </div>
+                        <p id="applyHint" class="hint">Каждая выбранная грань получит полное изображение.</p>
+                    </div>
+                    <div class="actions">
+                        <button class="button primary" onclick="loadImage()">Добавить изображение</button>
+                        <button class="button" onclick="clearSelected()">Стереть текстуру граней</button>
+                    </div>
+                    <input type="file" id="imageFileInput" class="file-input" accept="image/*" onchange="handleImageLoad(event)">
+                    <details class="extra-actions">
+                        <summary>Пул изображений и обёртка</summary>
+                        <p class="hint">Распределите изображения по выбранным граням или нанесите одно на все стороны скина.</p>
+                        <div class="actions">
+                            <button class="button" onclick="document.getElementById('poolFileInput').click()">Загрузить пул</button>
+                            <button class="button" onclick="randomizePool()">Распределить случайно</button>
+                            <button class="button" id="wrapButton" onclick="document.getElementById('wrapFileInput').click()">Обёртка на 6 сторон</button>
+                        </div>
+                        <input type="file" id="poolFileInput" class="file-input" accept="image/*" multiple onchange="loadPool(event)">
+                        <input type="file" id="wrapFileInput" class="file-input" accept="image/*" onchange="withImage(event, image => skinEditor.wrapImage(image))">
+                    </details>
+                </div>
+
+                <div class="control-group">
+                    <h3>Файлы</h3>
+                    <div class="actions">
+                        <button class="button primary" id="saveButton" onclick="saveSkin()">Скачать PNG</button>
+                        <button class="button" id="loadButton" onclick="loadSkin()">Открыть скин</button>
+                        <button class="button" id="newButton" onclick="createNewSkin()">Новый скин</button>
+                    </div>
                     <input type="file" id="skinFileInput" class="file-input" accept="image/*" onchange="handleSkinLoad(event)">
                 </div>
-
-                <div class="control-group">
-                    <h3>🎭 Режим</h3>
-                    <div class="mode-selector">
-                        <button type="button" class="mode-option selected" data-work-mode="skin" onclick="selectWorkMode('skin')">Скин</button>
-                        <button type="button" class="mode-option" data-work-mode="cape" onclick="selectWorkMode('cape')">Плащ</button>
-                    </div>
-                </div>
-
-                <div class="control-group">
-                    <h3>📏 Размер</h3>
-                    <div class="size-selector">
-                        <button type="button" class="size-option selected" data-size="64" onclick="selectSize(64)">64x64</button>
-                        <button type="button" class="size-option" data-size="1024" onclick="selectSize(1024)">1024x1024</button>
-                    </div>
-                </div>
-
-                <div class="control-group">
-                    <h3>🎨 Изображения</h3>
-                    <button class="button" onclick="loadImage()">Добавить изображение</button>
-                    <button class="button secondary" onclick="document.getElementById('poolFileInput').click()">Загрузить пул</button>
-                    <button class="button secondary" onclick="randomizePool()">Случайно из пула</button>
-                    <button class="button secondary" id="wrapButton" onclick="document.getElementById('wrapFileInput').click()">Обёртка на 6 сторон</button>
-                    <input type="file" id="poolFileInput" class="file-input" accept="image/*" multiple onchange="loadPool(event)">
-                    <input type="file" id="wrapFileInput" class="file-input" accept="image/*" onchange="withImage(event, image => skinEditor.wrapImage(image))">
-                    <button class="button secondary" onclick="clearSelected()">Очистить выбранное</button>
-                    <input type="file" id="imageFileInput" class="file-input" accept="image/*" onchange="handleImageLoad(event)">
-                </div>
             </div>
-        </div>
+        </section>
 
-        <!-- Вкладка частей -->
-        <div id="parts" class="tab-content">
+        <section id="parts" class="tab-content">
             <div class="control-group">
-                <h3>🎯 Быстрый выбор</h3>
-                <div class="quick-buttons">
-                    <button class="button" onclick="selectAllParts()">Все части</button>
+                <div class="workspace-heading">
+                    <div>
+                        <h2>Выбор граней</h2>
+                        <p class="hint">Выберите целый слой или отдельные грани по списку.</p>
+                    </div>
+                    <span class="selection-info" id="selectionInfo">Выбрано: 0</span>
+                </div>
+                <div class="actions">
+                    <button class="button" onclick="selectAllParts()">Все грани</button>
                     <button class="button" onclick="selectMainLayer()">Основной слой</button>
                     <button class="button" id="overlayButton" onclick="selectOverlayLayer()">Второй слой</button>
-                    <button class="button secondary" onclick="clearSelection()">Очистить</button>
+                    <button class="button" onclick="clearSelection()">Снять выбор</button>
+                    <button class="button primary" onclick="switchTab('editor')">К редактору</button>
                 </div>
+                <div class="parts-categories" id="partsCategories"></div>
             </div>
+        </section>
 
+        <section id="preview" class="tab-content">
             <div class="control-group">
-                <h3>🧩 Части тела</h3>
-                <div class="parts-categories" id="partsCategories">
-                    <!-- Категории будут добавлены динамически -->
-                </div>
-                <div class="selection-info" id="selectionInfo">Выбрано: 0 частей</div>
-            </div>
-
-            <div class="control-group">
-                <h3>⚙️ Режим применения</h3>
-                <div class="mode-selector">
-                    <button type="button" class="mode-option selected" data-apply-mode="individual" onclick="selectMode('individual')">Отдельно</button>
-                    <button type="button" class="mode-option" data-apply-mode="stretch" onclick="selectMode('stretch')">Растянуть</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Вкладка превью -->
-        <div id="preview" class="tab-content">
-            <div class="control-group">
-                <h3>👁️ 3D Превью</h3>
-                <button class="button" onclick="generate3DPreview()">Обновить превью</button>
+                <h2>3D-просмотр</h2>
+                <p class="hint">Поверните модель, чтобы проверить текстуру с разных сторон.</p>
                 <div class="preview-container">
-                    <canvas id="previewCanvas" width="280" height="320"></canvas>
+                    <canvas id="skinModelCanvas" width="280" height="320" aria-label="Трёхмерная модель скина" hidden></canvas>
+                    <canvas id="previewCanvas" width="280" height="320" aria-label="Предпросмотр модели"></canvas>
                 </div>
                 <div class="preview-controls">
-                    <button class="button secondary" onclick="rotatePreview()">Повернуть</button>
-                    <button class="button secondary" onclick="resetPreview()">Сброс</button>
+                    <label id="previewOverlayOption"><input type="checkbox" id="previewOverlay" checked> Показывать второй слой</label>
+                    <button class="button primary" onclick="rotatePreview()">Повернуть на 45°</button>
+                    <button class="button" onclick="resetPreview()">Исходный ракурс</button>
                 </div>
             </div>
-        </div>
-    </div>
+        </section>
+    </main>
 
+    <script defer src="vendor/skinview3d-3.4.2.js"></script>
     <script defer src="telegram_skin_editor.js"></script>
 </body>
 </html>

@@ -5,6 +5,12 @@ class TelegramSkinEditor {
         this.ctx = this.canvas.getContext('2d');
         this.previewCanvas = document.getElementById('previewCanvas');
         this.previewCtx = this.previewCanvas.getContext('2d');
+        this.skinModelCanvas = document.getElementById('skinModelCanvas');
+        this.skinViewer = null;
+        this.skinViewerUnavailable = false;
+        this.previewTexture = null;
+        this.previewOverlay = document.querySelector('#previewOverlay');
+        this.previewOverlay.addEventListener('change', () => this.generate3DPreview());
         
         this.skinSize = 64;
         this.currentSkin = null;
@@ -284,6 +290,52 @@ class TelegramSkinEditor {
     }
 
     generate3DPreview() {
+        const skinMode = this.workMode === 'skin';
+        document.querySelector('#previewOverlayOption').hidden = !skinMode;
+        const useSkinModel = skinMode && this.renderSkinModel();
+        this.skinModelCanvas.hidden = !useSkinModel;
+        this.previewCanvas.hidden = useSkinModel;
+        if (!useSkinModel) this.renderCanvasPreview();
+    }
+
+    renderSkinModel() {
+        if (this.skinViewerUnavailable || !window.skinview3d) return false;
+
+        try {
+            if (!this.skinViewer) {
+                this.skinViewer = new window.skinview3d.SkinViewer({
+                    canvas: this.skinModelCanvas,
+                    width: 280,
+                    height: 320,
+                    enableControls: false,
+                    renderPaused: true,
+                    preserveDrawingBuffer: true,
+                    zoom: 0.85
+                });
+                const camera = this.skinViewer.camera;
+                camera.position.y = camera.position.z * 0.2;
+                camera.lookAt(0, 0, 0);
+            }
+
+            if (this.previewTexture !== this.currentSkin) {
+                // The editor uses the classic four-pixel arm layout at both resolutions.
+                this.skinViewer.loadSkin(this.textureCanvas(), {model: 'default'});
+                this.previewTexture = this.currentSkin;
+            }
+
+            this.skinViewer.playerObject.skin.setOuterLayerVisible(this.previewOverlay.checked);
+            this.skinViewer.playerObject.rotation.y = this.previewRotation + Math.PI / 6;
+            this.skinViewer.render();
+            return true;
+        } catch (error) {
+            this.skinViewer?.dispose();
+            this.skinViewerUnavailable = true;
+            console.warn('WebGL skin preview unavailable', error);
+            return false;
+        }
+    }
+
+    renderCanvasPreview() {
         const ctx = this.previewCtx;
         const {width, height} = this.previewCanvas;
         const texture = this.textureCanvas();
@@ -330,7 +382,7 @@ class TelegramSkinEditor {
         for (const {part, side, a, b, c} of faces.sort((first, second) => first.depth - second.depth)) {
             ctx.save();
             ctx.setTransform(b[0] - a[0], b[1] - a[1], c[0] - a[0], c[1] - a[1], a[0], a[1]);
-            const layers = cape ? [part] : [part, part + '_overlay'];
+            const layers = cape || !this.previewOverlay.checked ? [part] : [part, part + '_overlay'];
             for (const layer of layers) {
                 const [x1, y1, x2, y2] = this.getScaledRegion(layer + '_' + side);
                 ctx.drawImage(texture, x1, y1, x2 - x1, y2 - y1, 0, 0, 1, 1);
@@ -378,8 +430,7 @@ class TelegramSkinEditor {
         }
         document.querySelector('#wrapButton').disabled = cape;
         document.querySelector('#overlayButton').disabled = cape;
-        document.querySelector('#loadButton').textContent = cape ? 'Загрузить плащ' : 'Загрузить скин';
-        document.querySelector('#saveButton').textContent = cape ? 'Сохранить плащ' : 'Сохранить скин';
+        document.querySelector('#loadButton').textContent = cape ? 'Открыть плащ' : 'Открыть скин';
         document.querySelector('#newButton').textContent = cape ? 'Новый плащ' : 'Новый скин';
     }
 
@@ -425,8 +476,8 @@ class TelegramSkinEditor {
         const scaleX = this.canvas.width / this.currentSkin.width;
         const scaleY = this.canvas.height / this.currentSkin.height;
         
-        this.ctx.fillStyle = 'rgba(0, 122, 255, 0.3)';
-        this.ctx.strokeStyle = 'rgba(0, 122, 255, 0.8)';
+        this.ctx.fillStyle = 'rgba(168, 236, 136, 0.28)';
+        this.ctx.strokeStyle = 'rgba(168, 236, 136, 0.95)';
         this.ctx.lineWidth = 2;
         
         for (const partId of this.selectedParts) {
@@ -456,7 +507,7 @@ class TelegramSkinEditor {
     }
     
     setupCapeInterface(container) {
-        const category = this.createCategory('Части плаща', 'cape-parts', true);
+        const category = this.createCategory('Части плаща', true);
         
         const parts = Object.entries(this.capeNames);
         const partsContainer = category.querySelector('.category-parts');
@@ -515,7 +566,7 @@ class TelegramSkinEditor {
         
         categories.forEach((cat, index) => {
             if (cat.parts.length > 0) {
-                const category = this.createCategory(cat.title, `category-${index}`, index < 2);
+                const category = this.createCategory(cat.title, index < 2);
                 const partsContainer = category.querySelector('.category-parts');
                 
                 cat.parts.forEach(([partId, partName]) => {
@@ -528,38 +579,29 @@ class TelegramSkinEditor {
         });
     }
     
-    createCategory(title, id, expanded = false) {
-        const category = document.createElement('div');
+    createCategory(title, expanded = false) {
+        const category = document.createElement('details');
         category.className = 'category';
-        
-        const header = document.createElement('div');
+        category.open = expanded;
+
+        const header = document.createElement('summary');
         header.className = 'category-header';
-        header.innerHTML = `
-            <span>${title}</span>
-            <span class="expand-icon">${expanded ? '▼' : '▶'}</span>
-        `;
-        
+        header.textContent = title;
+
         const content = document.createElement('div');
-        content.className = `category-content ${expanded ? 'expanded' : ''}`;
-        
+        content.className = 'category-content';
+
         const partsContainer = document.createElement('div');
         partsContainer.className = 'category-parts';
         content.appendChild(partsContainer);
-        
-        header.onclick = () => {
-            const isExpanded = content.classList.contains('expanded');
-            content.classList.toggle('expanded');
-            header.querySelector('.expand-icon').textContent = isExpanded ? '▶' : '▼';
-        };
-        
-        category.appendChild(header);
-        category.appendChild(content);
-        
+        category.append(header, content);
+
         return category;
     }
     
     createPartButton(partId, partName) {
-        const button = document.createElement('div');
+        const button = document.createElement('button');
+        button.type = 'button';
         button.className = 'part-button';
         button.textContent = partName.replace(/^[^-]+ - /, ''); // Убираем префикс для краткости
         button.onclick = () => this.togglePart(partId);
@@ -580,17 +622,15 @@ class TelegramSkinEditor {
     
     updatePartsDisplay() {
         const buttons = document.querySelectorAll('.part-button');
-        buttons.forEach(button => {
-            const partId = button.dataset.partId;
-            if (this.selectedParts.has(partId)) {
-                button.classList.add('selected');
-            } else {
-                button.classList.remove('selected');
-            }
-        });
-        
-        document.getElementById('selectionInfo').textContent = 
-            `Выбрано: ${this.selectedParts.size} частей`;
+        for (const button of buttons) {
+            const selected = this.selectedParts.has(button.dataset.partId);
+            button.classList.toggle('selected', selected);
+            button.setAttribute('aria-pressed', String(selected));
+        }
+
+        const count = `Выбрано: ${this.selectedParts.size}`;
+        document.querySelector('#selectionInfo').textContent = count;
+        document.querySelector('#editorSelection').textContent = count;
     }
     
     selectAllParts() {
@@ -911,6 +951,9 @@ function selectMode(mode) {
         button.classList.toggle('selected', button.dataset.applyMode === mode);
     }
     skinEditor.applyMode = mode;
+    document.querySelector('#applyHint').textContent = mode === 'stretch'
+        ? 'Одно изображение распределится по общей области выбранных граней.'
+        : 'Каждая выбранная грань получит полное изображение.';
 }
 
 function generate3DPreview() { skinEditor.generate3DPreview(); }

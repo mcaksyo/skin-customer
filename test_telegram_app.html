@@ -48,10 +48,31 @@ frame.addEventListener('load', async () => {
         check(Object.keys(editor.skinRegions).filter(id => !id.includes('_overlay')).every(id => {
             const [x,y] = editor.getScaledRegion(id); return pix(x,y) === 255;
         }), 'wrap');
-        app.switchTab('preview');
-        const original = editor.previewCanvas.toDataURL();
-        app.rotatePreview();
-        check(editor.previewCanvas.toDataURL() !== original, 'rotation');
+        editor.paintRegions(ctx => {
+            const [x1, y1, x2, y2] = editor.getScaledRegion('head_overlay_front');
+            ctx.fillStyle = '#00ff00';
+            ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+        });
+        for (const size of [64, 1024]) {
+            app.selectSize(size);
+            app.switchTab('preview');
+            const webgl = !editor.skinModelCanvas.hidden;
+            const preview = webgl ? editor.skinModelCanvas : editor.previewCanvas;
+            app.resetPreview();
+            const original = preview.toDataURL();
+            editor.previewOverlay.click();
+            check(preview.toDataURL() !== original, JSON.stringify({webgl, size, checked:editor.previewOverlay.checked, outer:editor.skinViewer?.playerObject.skin.head.outerLayer.visible, canvas:preview.width, img:original.length, overlay:pix(41*size/64,9*size/64,1), internal:editor.skinViewer?.skinCanvas.getContext("2d").getImageData(41*size/64,9*size/64,1,1).data[1]}));
+            editor.previewOverlay.click();
+            check(preview.toDataURL() === original, 'Restore second layer');
+            app.rotatePreview();
+            check(preview.toDataURL() !== original, `Preview rotation at ${size}×${size}`);
+            if (webgl) {
+                const texture = editor.skinViewer.skinCanvas;
+                check(editor.skinViewer.playerObject.skin.visible, 'WebGL skin visibility');
+                check(texture.width === size && texture.height === size, 'Native texture resolution');
+            }
+            out.dataset.renderer = webgl ? 'webgl' : 'canvas';
+        }
         const originalClick = app.HTMLAnchorElement.prototype.click;
         app.HTMLAnchorElement.prototype.click = function () {
             check(this.download === 'minecraft_skin.png' && this.href.startsWith('data:image/png;'), 'export');
