@@ -59,12 +59,14 @@ frame.addEventListener('load', async () => {
             const webgl = !editor.skinModelCanvas.hidden;
             const preview = webgl ? editor.skinModelCanvas : editor.previewCanvas;
             app.resetPreview();
+            check(editor.previewRotation === 0, "Front view on reset");
             const original = preview.toDataURL();
             editor.previewOverlay.click();
-            check(preview.toDataURL() !== original, JSON.stringify({webgl, size, checked:editor.previewOverlay.checked, outer:editor.skinViewer?.playerObject.skin.head.outerLayer.visible, canvas:preview.width, img:original.length, overlay:pix(41*size/64,9*size/64,1), internal:editor.skinViewer?.skinCanvas.getContext("2d").getImageData(41*size/64,9*size/64,1,1).data[1]}));
+            check(preview.toDataURL() !== original, 'Hide second layer');
             editor.previewOverlay.click();
             check(preview.toDataURL() === original, 'Restore second layer');
             app.rotatePreview();
+            check(editor.previewRotation === Math.PI / 6, "30 degree rotation");
             check(preview.toDataURL() !== original, `Preview rotation at ${size}×${size}`);
             if (webgl) {
                 const texture = editor.skinViewer.skinCanvas;

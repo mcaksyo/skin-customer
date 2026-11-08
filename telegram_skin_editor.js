@@ -312,19 +312,18 @@ class TelegramSkinEditor {
                     preserveDrawingBuffer: true,
                     zoom: 0.85
                 });
-                const camera = this.skinViewer.camera;
-                camera.position.y = camera.position.z * 0.2;
-                camera.lookAt(0, 0, 0);
             }
 
             if (this.previewTexture !== this.currentSkin) {
                 // The editor uses the classic four-pixel arm layout at both resolutions.
                 this.skinViewer.loadSkin(this.textureCanvas(), {model: 'default'});
+                // Keep the editor's alpha and colors after the library's legacy-skin cleanup.
+                this.skinViewer.skinCanvas.getContext('2d').putImageData(this.currentSkin, 0, 0);
                 this.previewTexture = this.currentSkin;
             }
 
             this.skinViewer.playerObject.skin.setOuterLayerVisible(this.previewOverlay.checked);
-            this.skinViewer.playerObject.rotation.y = this.previewRotation + Math.PI / 6;
+            this.skinViewer.playerObject.rotation.y = this.previewRotation;
             this.skinViewer.render();
             return true;
         } catch (error) {
@@ -339,10 +338,10 @@ class TelegramSkinEditor {
         const ctx = this.previewCtx;
         const {width, height} = this.previewCanvas;
         const texture = this.textureCanvas();
-        const angle = this.previewRotation + Math.PI / 6;
+        const angle = this.previewRotation;
         const sin = Math.sin(angle);
         const cos = Math.cos(angle);
-        const tilt = 0.32;
+        const tilt = 0;
         const scale = this.previewScale;
         const cape = this.workMode === 'cape';
         const project = ([x, y, z]) => {
@@ -392,7 +391,7 @@ class TelegramSkinEditor {
     }
 
     rotatePreview() {
-        this.previewRotation = (this.previewRotation + Math.PI / 4) % (Math.PI * 2);
+        this.previewRotation = (this.previewRotation + Math.PI / 6) % (Math.PI * 2);
         this.generate3DPreview();
     }
 
