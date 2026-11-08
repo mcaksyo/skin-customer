@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Minecraft Skin Editor</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script defer src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         * {
             margin: 0;
@@ -21,7 +21,7 @@
         }
 
         .container {
-            max-width: 100%;
+            max-width: 920px;
             margin: 0 auto;
         }
 
@@ -85,7 +85,7 @@
         #skinCanvas {
             border: 2px solid var(--tg-theme-hint-color, #999999);
             border-radius: 8px;
-            background: white;
+            background: repeating-conic-gradient(#fff 0% 25%, #e5e7eb 0% 50%) 0 0 / 16px 16px;
             max-width: 100%;
             height: auto;
         }
@@ -305,6 +305,36 @@
             height: auto;
         }
 
+        #status, .editor-options {
+            margin: 10px 0;
+            font-size: 14px;
+        }
+
+        .tab, .mode-option, .size-option {
+            font-family: inherit;
+            color: inherit;
+        }
+
+        .tab {
+            border: 0;
+            background: transparent;
+        }
+
+        @media (min-width: 680px) {
+            .controls {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        .button:disabled {
+            opacity: 0.45;
+            cursor: default;
+        }
+
+        #skinCanvas {
+            cursor: crosshair;
+        }
+
         @media (max-width: 480px) {
             .parts-grid {
                 grid-template-columns: repeat(2, 1fr);
@@ -325,14 +355,16 @@
     <div class="container">
         <div class="header">
             <h1>🎮 Minecraft Skin Editor</h1>
-            <p>Создавай и редактируй скины прямо в Telegram!</p>
+            <p>Редактор текстур для скинов и плащей</p>
         </div>
 
         <div class="tabs">
-            <div class="tab active" onclick="switchTab('editor')">Редактор</div>
-            <div class="tab" onclick="switchTab('parts')">Части</div>
-            <div class="tab" onclick="switchTab('preview')">Превью</div>
+            <button type="button" class="tab active" onclick="switchTab('editor')">Редактор</button>
+            <button type="button" class="tab" onclick="switchTab('parts')">Части</button>
+            <button type="button" class="tab" onclick="switchTab('preview')">Превью</button>
         </div>
+
+        <p id="status" role="status" aria-live="polite">Выберите грань на развёртке или во вкладке «Части».</p>
 
         <!-- Вкладка редактора -->
         <div id="editor" class="tab-content active">
@@ -340,34 +372,43 @@
                 <canvas id="skinCanvas" width="320" height="320"></canvas>
             </div>
 
+            <div class="editor-options">
+                <label><input type="checkbox" id="showGrid" checked onchange="skinEditor.updateDisplay()"> Показывать сетку</label>
+                <p>Нажмите на грань развёртки, чтобы выбрать её.</p>
+            </div>
             <div class="controls">
                 <div class="control-group">
                     <h3>📁 Файлы</h3>
-                    <button class="button" onclick="loadSkin()">Загрузить скин</button>
-                    <button class="button secondary" onclick="saveSkin()">Сохранить скин</button>
-                    <button class="button secondary" onclick="createNewSkin()">Новый скин</button>
+                    <button class="button" id="loadButton" onclick="loadSkin()">Загрузить скин</button>
+                    <button class="button secondary" id="saveButton" onclick="saveSkin()">Сохранить скин</button>
+                    <button class="button secondary" id="newButton" onclick="createNewSkin()">Новый скин</button>
                     <input type="file" id="skinFileInput" class="file-input" accept="image/*" onchange="handleSkinLoad(event)">
                 </div>
 
                 <div class="control-group">
                     <h3>🎭 Режим</h3>
                     <div class="mode-selector">
-                        <div class="mode-option selected" onclick="selectWorkMode('skin')">Скин</div>
-                        <div class="mode-option" onclick="selectWorkMode('cape')">Плащ</div>
+                        <button type="button" class="mode-option selected" data-work-mode="skin" onclick="selectWorkMode('skin')">Скин</button>
+                        <button type="button" class="mode-option" data-work-mode="cape" onclick="selectWorkMode('cape')">Плащ</button>
                     </div>
                 </div>
 
                 <div class="control-group">
                     <h3>📏 Размер</h3>
                     <div class="size-selector">
-                        <div class="size-option selected" onclick="selectSize('64')">64x64</div>
-                        <div class="size-option" onclick="selectSize('1024')">1024x1024</div>
+                        <button type="button" class="size-option selected" data-size="64" onclick="selectSize(64)">64x64</button>
+                        <button type="button" class="size-option" data-size="1024" onclick="selectSize(1024)">1024x1024</button>
                     </div>
                 </div>
 
                 <div class="control-group">
                     <h3>🎨 Изображения</h3>
                     <button class="button" onclick="loadImage()">Добавить изображение</button>
+                    <button class="button secondary" onclick="document.getElementById('poolFileInput').click()">Загрузить пул</button>
+                    <button class="button secondary" onclick="randomizePool()">Случайно из пула</button>
+                    <button class="button secondary" id="wrapButton" onclick="document.getElementById('wrapFileInput').click()">Обёртка на 6 сторон</button>
+                    <input type="file" id="poolFileInput" class="file-input" accept="image/*" multiple onchange="loadPool(event)">
+                    <input type="file" id="wrapFileInput" class="file-input" accept="image/*" onchange="withImage(event, image => skinEditor.wrapImage(image))">
                     <button class="button secondary" onclick="clearSelected()">Очистить выбранное</button>
                     <input type="file" id="imageFileInput" class="file-input" accept="image/*" onchange="handleImageLoad(event)">
                 </div>
@@ -381,7 +422,7 @@
                 <div class="quick-buttons">
                     <button class="button" onclick="selectAllParts()">Все части</button>
                     <button class="button" onclick="selectMainLayer()">Основной слой</button>
-                    <button class="button" onclick="selectOverlayLayer()">Второй слой</button>
+                    <button class="button" id="overlayButton" onclick="selectOverlayLayer()">Второй слой</button>
                     <button class="button secondary" onclick="clearSelection()">Очистить</button>
                 </div>
             </div>
@@ -397,8 +438,8 @@
             <div class="control-group">
                 <h3>⚙️ Режим применения</h3>
                 <div class="mode-selector">
-                    <div class="mode-option selected" onclick="selectMode('individual')">Отдельно</div>
-                    <div class="mode-option" onclick="selectMode('stretch')">Растянуть</div>
+                    <button type="button" class="mode-option selected" data-apply-mode="individual" onclick="selectMode('individual')">Отдельно</button>
+                    <button type="button" class="mode-option" data-apply-mode="stretch" onclick="selectMode('stretch')">Растянуть</button>
                 </div>
             </div>
         </div>
@@ -419,6 +460,6 @@
         </div>
     </div>
 
-    <script src="telegram_skin_editor.js"></script>
+    <script defer src="telegram_skin_editor.js"></script>
 </body>
 </html>

@@ -8,13 +8,16 @@ class TelegramSkinEditor {
         
         this.skinSize = 64;
         this.currentSkin = null;
+        this.textures = {};
+        this.imagePool = [];
+        this.textureRevision = 0;
         this.selectedParts = new Set();
         this.applyMode = 'individual';
         this.workMode = 'skin'; // 'skin' или 'cape'
         
         // Параметры 3D превью
         this.previewRotation = 0;
-        this.previewScale = 4;
+        this.previewScale = 7;
         
         // Регионы плащей (64x32 для стандартного, 1024x512 для HD)
         this.capeRegions = {
@@ -260,281 +263,136 @@ class TelegramSkinEditor {
         }
         
         this.createNewSkin();
-        this.setupPartsInterface();
-        this.updateDisplay();
-        
-        console.log('Initialization complete');
+        this.canvas.addEventListener('click', event => {
+            const bounds = this.canvas.getBoundingClientRect();
+            const x = (event.clientX - bounds.left) * this.currentSkin.width / bounds.width;
+            const y = (event.clientY - bounds.top) * this.currentSkin.height / bounds.height;
+            const part = Object.keys(this.getCurrentRegions()).find(id => {
+                const [x1, y1, x2, y2] = this.getScaledRegion(id);
+                return x >= x1 && x < x2 && y >= y1 && y < y2;
+            });
+            if (part) this.togglePart(part);
+        });
     }
-    
+
+    textureCanvas() {
+        const canvas = document.createElement('canvas');
+        canvas.width = this.currentSkin.width;
+        canvas.height = this.currentSkin.height;
+        canvas.getContext('2d').putImageData(this.currentSkin, 0, 0);
+        return canvas;
+    }
+
     generate3DPreview() {
-        console.log('Generating 3D preview...');
-        
-        if (!this.currentSkin) {
-            this.showMessage('Сначала создайте или загрузите скин');
-            return;
-        }
-        
-        console.log('Current skin dimensions:', this.currentSkin.width, 'x', this.currentSkin.height);
-        console.log('Work mode:', this.workMode);
-        
-        // Очищаем превью canvas
-        this.previewCtx.clearRect(0, 0, this.previewCanvas.width, this.previewCanvas.height);
-        
-        try {
-            if (this.workMode === 'cape') {
-                this.drawCapePreview();
-            } else {
-                this.drawSkinPreview();
-            }
-            
-            console.log('3D preview generated successfully');
-            this.showMessage('3D превью создано');
-        } catch (error) {
-            console.error('Error generating 3D preview:', error);
-            this.showMessage('Ошибка создания превью: ' + error.message);
-        }
-    }
-    
-    drawSkinPreview() {
-        const centerX = this.previewCanvas.width / 2;
-        const startY = 30;
+        const ctx = this.previewCtx;
+        const {width, height} = this.previewCanvas;
+        const texture = this.textureCanvas();
+        const angle = this.previewRotation + Math.PI / 6;
+        const sin = Math.sin(angle);
+        const cos = Math.cos(angle);
+        const tilt = 0.32;
         const scale = this.previewScale;
-        
-        // Рисуем фон
-        this.previewCtx.fillStyle = '#87CEEB';
-        this.previewCtx.fillRect(0, 0, this.previewCanvas.width, this.previewCanvas.height);
-        
-        // Рисуем тень
-        this.previewCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-        this.previewCtx.fillRect(centerX - 40, startY + 200, 80, 10);
-        
-        // Сохраняем контекст для поворота
-        this.previewCtx.save();
-        this.previewCtx.translate(centerX, startY + 100);
-        this.previewCtx.rotate(this.previewRotation);
-        this.previewCtx.translate(-centerX, -(startY + 100));
-        
-        // Рисуем голову (с тенью и объемом)
-        this.drawIsometric3DPart('head_front', centerX - 16, startY, scale, false);
-        this.drawIsometric3DPart('head_right', centerX + 16, startY, scale * 0.5, true);
-        this.drawIsometric3DPart('head_top', centerX - 16, startY - 8, scale, false, 1.2);
-        
-        // Второй слой головы
-        if (this.hasVisiblePart('head_overlay_front')) {
-            this.drawIsometric3DPart('head_overlay_front', centerX - 16, startY, scale, false, 0.9);
-            this.drawIsometric3DPart('head_overlay_right', centerX + 16, startY, scale * 0.5, true, 0.9);
-            this.drawIsometric3DPart('head_overlay_top', centerX - 16, startY - 8, scale, false, 1.1);
-        }
-        
-        // Рисуем тело
-        this.drawIsometric3DPart('body_front', centerX - 16, startY + 32, scale, false);
-        this.drawIsometric3DPart('body_right', centerX + 16, startY + 32, scale * 0.5, true);
-        this.drawIsometric3DPart('body_top', centerX - 16, startY + 24, scale, false, 1.2);
-        
-        // Второй слой тела
-        if (this.hasVisiblePart('body_overlay_front')) {
-            this.drawIsometric3DPart('body_overlay_front', centerX - 16, startY + 32, scale, false, 0.9);
-            this.drawIsometric3DPart('body_overlay_right', centerX + 16, startY + 32, scale * 0.5, true, 0.9);
-        }
-        
-        // Рисуем руки
-        this.drawIsometric3DPart('arm_right_front', centerX - 32, startY + 32, scale * 0.8, false);
-        this.drawIsometric3DPart('arm_left_front', centerX + 24, startY + 32, scale * 0.8, false);
-        
-        // Рукава
-        if (this.hasVisiblePart('arm_right_overlay_front')) {
-            this.drawIsometric3DPart('arm_right_overlay_front', centerX - 32, startY + 32, scale * 0.8, false, 0.9);
-        }
-        if (this.hasVisiblePart('arm_left_overlay_front')) {
-            this.drawIsometric3DPart('arm_left_overlay_front', centerX + 24, startY + 32, scale * 0.8, false, 0.9);
-        }
-        
-        // Рисуем ноги
-        this.drawIsometric3DPart('leg_right_front', centerX - 16, startY + 80, scale * 0.8, false);
-        this.drawIsometric3DPart('leg_left_front', centerX, startY + 80, scale * 0.8, false);
-        
-        // Штанины
-        if (this.hasVisiblePart('leg_right_overlay_front')) {
-            this.drawIsometric3DPart('leg_right_overlay_front', centerX - 16, startY + 80, scale * 0.8, false, 0.9);
-        }
-        if (this.hasVisiblePart('leg_left_overlay_front')) {
-            this.drawIsometric3DPart('leg_left_overlay_front', centerX, startY + 80, scale * 0.8, false, 0.9);
-        }
-        
-        this.previewCtx.restore();
-    }
-    
-    drawCapePreview() {
-        const centerX = this.previewCanvas.width / 2;
-        const startY = 50;
-        const scale = 6;
-        
-        // Рисуем фон
-        this.previewCtx.fillStyle = '#87CEEB';
-        this.previewCtx.fillRect(0, 0, this.previewCanvas.width, this.previewCanvas.height);
-        
-        // Рисуем плащ
-        this.drawIsometric3DPart('cape_back', centerX - 30, startY, scale, false);
-        this.drawIsometric3DPart('cape_right', centerX + 30, startY, scale * 0.2, true);
-        
-        // Добавляем текст
-        this.previewCtx.fillStyle = 'white';
-        this.previewCtx.font = 'bold 16px Arial';
-        this.previewCtx.textAlign = 'center';
-        this.previewCtx.strokeStyle = 'black';
-        this.previewCtx.lineWidth = 2;
-        this.previewCtx.strokeText('Плащ', centerX, startY - 20);
-        this.previewCtx.fillText('Плащ', centerX, startY - 20);
-    }
-    
-    drawIsometric3DPart(partId, x, y, scale, darken = false, alpha = 1.0) {
-        const scaledRegion = this.getScaledRegion(partId);
-        if (!scaledRegion) return;
-        
-        const [x1, y1, x2, y2] = scaledRegion;
-        const width = x2 - x1;
-        const height = y2 - y1;
-        
-        if (width <= 0 || height <= 0) return;
-        
-        // Создаем временный canvas для части
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = width;
-        tempCanvas.height = height;
-        const tempCtx = tempCanvas.getContext('2d');
-        
-        // Извлекаем часть из скина
-        const partImageData = new ImageData(width, height);
-        
-        for (let py = 0; py < height; py++) {
-            for (let px = 0; px < width; px++) {
-                const srcX = x1 + px;
-                const srcY = y1 + py;
-                
-                if (srcX < this.currentSkin.width && srcY < this.currentSkin.height) {
-                    const srcIndex = (srcY * this.currentSkin.width + srcX) * 4;
-                    const dstIndex = (py * width + px) * 4;
-                    
-                    if (srcIndex < this.currentSkin.data.length) {
-                        partImageData.data[dstIndex] = this.currentSkin.data[srcIndex];
-                        partImageData.data[dstIndex + 1] = this.currentSkin.data[srcIndex + 1];
-                        partImageData.data[dstIndex + 2] = this.currentSkin.data[srcIndex + 2];
-                        partImageData.data[dstIndex + 3] = this.currentSkin.data[srcIndex + 3];
-                    }
-                }
+        const cape = this.workMode === 'cape';
+        const project = ([x, y, z]) => {
+            const depth = x * sin + z * cos;
+            return [
+                width / 2 + (x * cos - z * sin) * scale,
+                height / 2 + (y - (cape ? 8 : 16) + depth * tilt) * scale,
+                depth - y * tilt
+            ];
+        };
+        const boxes = cape ? [['cape', -5, 0, -0.5, 10, 16, 1]] : [
+            ['head', -4, 0, -4, 8, 8, 8],
+            ['body', -4, 8, -2, 8, 12, 4],
+            ['arm_right', -8, 8, -2, 4, 12, 4],
+            ['arm_left', 4, 8, -2, 4, 12, 4],
+            ['leg_right', -4, 20, -2, 4, 12, 4],
+            ['leg_left', 0, 20, -2, 4, 12, 4]
+        ];
+        const faces = [];
+        for (const [part, x, y, z, w, h, d] of boxes) {
+            const x2 = x + w, y2 = y + h, z2 = z + d;
+            const sides = [
+                ['front', [x, y, z2], [x2, y, z2], [x, y2, z2], cos],
+                ['back', [x2, y, z], [x, y, z], [x2, y2, z], -cos],
+                ['right', [x, y, z], [x, y, z2], [x, y2, z], -sin],
+                ['left', [x2, y, z2], [x2, y, z], [x2, y2, z2], sin],
+                ['top', [x, y, z], [x2, y, z], [x, y, z2], tilt]
+            ];
+            for (const [side, origin, horizontal, vertical, visibility] of sides) {
+                if (visibility <= 0.0001) continue;
+                const [a, b, c] = [origin, horizontal, vertical].map(project);
+                faces.push({part, side, a, b, c, depth: (b[2] + c[2]) / 2});
             }
         }
-        
-        tempCtx.putImageData(partImageData, 0, 0);
-        
-        // Рисуем на превью canvas с эффектами
-        this.previewCtx.imageSmoothingEnabled = false;
-        this.previewCtx.globalAlpha = alpha;
-        
-        if (darken) {
-            this.previewCtx.filter = 'brightness(0.6) contrast(1.2)';
-        } else {
-            this.previewCtx.filter = 'brightness(1.0) contrast(1.1)';
-        }
-        
-        // Добавляем тень
-        this.previewCtx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-        this.previewCtx.shadowBlur = 2;
-        this.previewCtx.shadowOffsetX = 1;
-        this.previewCtx.shadowOffsetY = 1;
-        
-        this.previewCtx.drawImage(tempCanvas, x, y, width * scale, height * scale);
-        
-        // Сбрасываем эффекты
-        this.previewCtx.filter = 'none';
-        this.previewCtx.globalAlpha = 1.0;
-        this.previewCtx.shadowColor = 'transparent';
-    }
-    
-    hasVisiblePart(partId) {
-        const scaledRegion = this.getScaledRegion(partId);
-        if (!scaledRegion) return false;
-        
-        const [x1, y1, x2, y2] = scaledRegion;
-        
-        // Проверяем несколько пикселей на прозрачность
-        for (let y = y1; y < y2; y += Math.max(1, Math.floor((y2 - y1) / 4))) {
-            for (let x = x1; x < x2; x += Math.max(1, Math.floor((x2 - x1) / 4))) {
-                const index = (y * this.currentSkin.width + x) * 4 + 3;
-                if (index < this.currentSkin.data.length && this.currentSkin.data[index] > 10) {
-                    return true;
-                }
+        ctx.clearRect(0, 0, width, height);
+        ctx.imageSmoothingEnabled = false;
+        for (const {part, side, a, b, c} of faces.sort((first, second) => first.depth - second.depth)) {
+            ctx.save();
+            ctx.setTransform(b[0] - a[0], b[1] - a[1], c[0] - a[0], c[1] - a[1], a[0], a[1]);
+            const layers = cape ? [part] : [part, part + '_overlay'];
+            for (const layer of layers) {
+                const [x1, y1, x2, y2] = this.getScaledRegion(layer + '_' + side);
+                ctx.drawImage(texture, x1, y1, x2 - x1, y2 - y1, 0, 0, 1, 1);
             }
+            ctx.restore();
         }
-        return false;
     }
-    
+
     rotatePreview() {
-        this.previewRotation += Math.PI / 4; // Поворот на 45 градусов
-        if (this.previewRotation >= Math.PI * 2) {
-            this.previewRotation = 0;
-        }
+        this.previewRotation = (this.previewRotation + Math.PI / 4) % (Math.PI * 2);
         this.generate3DPreview();
     }
-    
+
     resetPreview() {
         this.previewRotation = 0;
-        this.previewScale = 4;
         this.generate3DPreview();
     }
-    
-    createNewSkin() {
-        if (this.workMode === 'cape') {
-            // Плащи: 64x32 или 1024x512
-            const width = this.skinSize;
-            const height = this.skinSize / 2;
-            this.currentSkin = new ImageData(width, height);
-            
-            // Обновляем размер canvas для плащей
-            this.canvas.width = 320;
-            this.canvas.height = 160;
-        } else {
-            // Скины: 64x64 или 1024x1024
-            this.currentSkin = new ImageData(this.skinSize, this.skinSize);
-            
-            // Обновляем размер canvas для скинов
-            this.canvas.width = 320;
-            this.canvas.height = 320;
-        }
-        
-        // Заполняем прозрачным цветом
-        for (let i = 0; i < this.currentSkin.data.length; i += 4) {
-            this.currentSkin.data[i] = 0;     // R
-            this.currentSkin.data[i + 1] = 0; // G
-            this.currentSkin.data[i + 2] = 0; // B
-            this.currentSkin.data[i + 3] = 0; // A
-        }
+
+    setTexture(image) {
+        this.textureRevision++;
+        this.currentSkin = image;
+        this.skinSize = image.width;
+        this.textures[this.workMode] = image;
+        this.canvas.width = 320;
+        this.canvas.height = 320 * image.height / image.width;
+        this.updateControls();
         this.updateDisplay();
+    }
+
+    createNewSkin() {
+        const height = this.workMode === 'cape' ? this.skinSize / 2 : this.skinSize;
+        this.setTexture(new ImageData(this.skinSize, height));
         this.setupPartsInterface();
     }
-    
+
+    updateControls() {
+        const cape = this.workMode === 'cape';
+        for (const button of document.querySelectorAll('[data-size]')) {
+            const size = Number(button.dataset.size);
+            button.textContent = `${size}×${cape ? size / 2 : size}`;
+            button.classList.toggle('selected', size === this.skinSize);
+        }
+        for (const button of document.querySelectorAll('[data-work-mode]')) {
+            button.classList.toggle('selected', button.dataset.workMode === this.workMode);
+        }
+        document.querySelector('#wrapButton').disabled = cape;
+        document.querySelector('#overlayButton').disabled = cape;
+        document.querySelector('#loadButton').textContent = cape ? 'Загрузить плащ' : 'Загрузить скин';
+        document.querySelector('#saveButton').textContent = cape ? 'Сохранить плащ' : 'Сохранить скин';
+        document.querySelector('#newButton').textContent = cape ? 'Новый плащ' : 'Новый скин';
+    }
+
     updateDisplay() {
         if (!this.currentSkin) return;
         
         // Очищаем canvas
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
-        // Создаем временный canvas для скина
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = this.currentSkin.width;
-        tempCanvas.height = this.currentSkin.height;
-        const tempCtx = tempCanvas.getContext('2d');
-        
-        // Рисуем скин
-        tempCtx.putImageData(this.currentSkin, 0, 0);
-        
-        // Масштабируем и отображаем
         this.ctx.imageSmoothingEnabled = false;
-        this.ctx.drawImage(tempCanvas, 0, 0, this.canvas.width, this.canvas.height);
-        
-        // Рисуем сетку
-        this.drawGrid();
-        
+        this.ctx.drawImage(this.textureCanvas(), 0, 0, this.canvas.width, this.canvas.height);
+        if (document.querySelector('#showGrid').checked) this.drawGrid();
+
         // Подсвечиваем выбранные части
         this.highlightSelectedParts();
     }
@@ -547,7 +405,7 @@ class TelegramSkinEditor {
         const scaleY = this.canvas.height / this.currentSkin.height;
         
         // Вертикальные линии
-        for (let x = 0; x <= this.currentSkin.width; x += 8) {
+        for (let x = 0; x <= this.currentSkin.width; x += this.skinSize / 8) {
             this.ctx.beginPath();
             this.ctx.moveTo(x * scaleX, 0);
             this.ctx.lineTo(x * scaleX, this.canvas.height);
@@ -555,7 +413,7 @@ class TelegramSkinEditor {
         }
         
         // Горизонтальные линии
-        for (let y = 0; y <= this.currentSkin.height; y += 8) {
+        for (let y = 0; y <= this.currentSkin.height; y += this.skinSize / 8) {
             this.ctx.beginPath();
             this.ctx.moveTo(0, y * scaleY);
             this.ctx.lineTo(this.canvas.width, y * scaleY);
@@ -789,80 +647,77 @@ class TelegramSkinEditor {
         this.updateDisplay();
     }
     
-    applyImageToParts(imageData) {
-        if (this.selectedParts.size === 0) {
-            this.showMessage('Выберите части для применения изображения');
-            return;
-        }
-        
-        const tempCanvas = document.createElement('canvas');
-        const tempCtx = tempCanvas.getContext('2d');
-        
-        for (const partId of this.selectedParts) {
-            const scaledRegion = this.getScaledRegion(partId);
-            if (!scaledRegion) continue;
-            
-            const [x1, y1, x2, y2] = scaledRegion;
-            const width = x2 - x1;
-            const height = y2 - y1;
-            
-            // Масштабируем изображение под размер части
-            tempCanvas.width = width;
-            tempCanvas.height = height;
-            tempCtx.clearRect(0, 0, width, height);
-            tempCtx.drawImage(imageData, 0, 0, width, height);
-            
-            // Получаем данные пикселей
-            const partImageData = tempCtx.getImageData(0, 0, width, height);
-            
-            // Применяем к скину
-            this.applyImageDataToRegion(partImageData, x1, y1, width, height);
-        }
-        
-        this.updateDisplay();
-        this.showMessage(`Изображение применено к ${this.selectedParts.size} частям`);
+    paintRegions(paint) {
+        const canvas = this.textureCanvas();
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        paint(ctx);
+        this.setTexture(ctx.getImageData(0, 0, canvas.width, canvas.height));
     }
-    
-    applyImageDataToRegion(imageData, startX, startY, width, height) {
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                const srcIndex = (y * width + x) * 4;
-                const dstIndex = ((startY + y) * this.currentSkin.width + (startX + x)) * 4;
-                
-                if (dstIndex < this.currentSkin.data.length && srcIndex < imageData.data.length) {
-                    this.currentSkin.data[dstIndex] = imageData.data[srcIndex];
-                    this.currentSkin.data[dstIndex + 1] = imageData.data[srcIndex + 1];
-                    this.currentSkin.data[dstIndex + 2] = imageData.data[srcIndex + 2];
-                    this.currentSkin.data[dstIndex + 3] = imageData.data[srcIndex + 3];
+
+    selectedRegions() {
+        if (!this.selectedParts.size) this.showMessage('Сначала выберите грани на развёртке или во вкладке «Части»');
+        return Array.from(this.selectedParts, id => this.getScaledRegion(id));
+    }
+
+    applyImageToParts(image) {
+        const regions = this.selectedRegions();
+        if (!regions.length) return;
+        const left = Math.min(...regions.map(region => region[0]));
+        const top = Math.min(...regions.map(region => region[1]));
+        const right = Math.max(...regions.map(region => region[2]));
+        const bottom = Math.max(...regions.map(region => region[3]));
+        this.paintRegions(ctx => {
+            for (const [x1, y1, x2, y2] of regions) {
+                const w = x2 - x1, h = y2 - y1;
+                if (this.applyMode === 'stretch') {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.rect(x1, y1, w, h);
+                    ctx.clip();
+                    ctx.drawImage(image, left, top, right - left, bottom - top);
+                    ctx.restore();
+                } else {
+                    ctx.drawImage(image, x1, y1, w, h);
                 }
             }
-        }
+        });
+        this.showMessage(`Обновлено граней: ${regions.length}`);
     }
-    
-    // Удаляем старые методы превью - теперь используем skinview3d
-    
-    getPartWidth(partType) {
-        const regions = {
-            'head': 8, 'body': 8, 'arm_right': 4, 'arm_left': 4, 'leg_right': 4, 'leg_left': 4
-        };
-        return regions[partType] || 8;
+
+    wrapImage(image) {
+        if (this.workMode !== 'skin') return;
+        const layouts = [
+            [['front', 'back'], [[6,0,8,9], [6,9,8,12], [2,9,4,12], [14,9,4,12], [6,21,4,15], [10,21,4,15]]],
+            [['right', 'left'], [[8,0,4,9], [8,9,4,12], [4,9,4,12], [12,9,4,12], [8,21,2,15], [10,21,2,15]]],
+            [['top', 'bottom'], [[6,6,8,8], [6,14,8,8], [2,14,4,4], [14,14,4,4], [6,22,4,4], [10,22,4,4]]]
+        ];
+        const parts = ['head', 'body', 'arm_right', 'arm_left', 'leg_right', 'leg_left'];
+        this.paintRegions(ctx => {
+            for (const [sides, positions] of layouts) {
+                for (const side of sides) {
+                    parts.forEach((part, index) => {
+                        const [sx, sy, sw, sh] = positions[index];
+                        const [x1, y1, x2, y2] = this.getScaledRegion(part + '_' + side);
+                        const w = x2 - x1, h = y2 - y1;
+                        ctx.save();
+                        ctx.translate(side === 'back' ? x2 : x1, y1);
+                        if (side === 'back') ctx.scale(-1, 1);
+                        const sourceX = side === 'back' ? 20 - sx - sw : sx;
+                        ctx.drawImage(image, sourceX * image.width / 20, sy * image.height / 36,
+                            sw * image.width / 20, sh * image.height / 36, 0, 0, w, h);
+                        ctx.restore();
+                    });
+                }
+            }
+        });
+        this.showMessage('Изображение нанесено на шесть сторон основного слоя');
     }
-    
-    getPartDepth(partType) {
-        const regions = {
-            'head': 8, 'body': 4, 'arm_right': 4, 'arm_left': 4, 'leg_right': 4, 'leg_left': 4
-        };
-        return regions[partType] || 4;
-    }
-    
+
     showMessage(text) {
-        if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.showAlert(text);
-        } else {
-            alert(text);
-        }
+        document.querySelector('#status').textContent = text;
     }
-    
+
     downloadSkin() {
         if (!this.currentSkin) {
             this.showMessage('Нет скина для сохранения');
@@ -883,7 +738,7 @@ class TelegramSkinEditor {
         link.href = tempCanvas.toDataURL();
         link.click();
         
-        this.showMessage(`${this.workMode === 'cape' ? 'Плащ' : 'Скин'} сохранен`);
+        this.showMessage(`PNG подготовлен к скачиванию: ${filename}`);
     }
 }
 
@@ -891,12 +746,13 @@ class TelegramSkinEditor {
 let skinEditor;
 
 // Инициализация при загрузке страницы
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', () => {
     skinEditor = new TelegramSkinEditor();
 });
 
 // Функции для HTML
 function switchTab(tabName) {
+    if (tabName === 'preview') skinEditor.generate3DPreview();
     // Скрываем все вкладки
     document.querySelectorAll('.tab-content').forEach(tab => {
         tab.classList.remove('active');
@@ -910,7 +766,6 @@ function switchTab(tabName) {
     
     // Находим и активируем соответствующую кнопку вкладки
     const tabs = document.querySelectorAll('.tab');
-    const tabTexts = ['Редактор', 'Части', 'Превью'];
     const tabNames = ['editor', 'parts', 'preview'];
     const tabIndex = tabNames.indexOf(tabName);
     
@@ -923,60 +778,48 @@ function loadSkin() {
     document.getElementById('skinFileInput').click();
 }
 
-function handleSkinLoad(event) {
+async function decodeImage(file) {
+    const url = URL.createObjectURL(file);
+    try {
+        const image = new Image();
+        image.src = url;
+        await image.decode();
+        return image;
+    } finally {
+        URL.revokeObjectURL(url);
+    }
+}
+
+async function withImage(event, apply) {
     const file = event.target.files[0];
+    event.target.value = '';
     if (!file) return;
-    
-    const img = new Image();
-    img.onload = function() {
-        let validSize = false;
-        
-        if (skinEditor.workMode === 'cape') {
-            // Плащи должны быть 64x32 или 1024x512
-            if ((img.width === 64 && img.height === 32) || 
-                (img.width === 1024 && img.height === 512)) {
-                validSize = true;
-                skinEditor.skinSize = img.width;
-            }
-        } else {
-            // Скины должны быть квадратными 64x64 или 1024x1024
-            if (img.width === img.height && (img.width === 64 || img.width === 1024)) {
-                validSize = true;
-                skinEditor.skinSize = img.width;
-            }
+    const revision = skinEditor.textureRevision;
+    try {
+        const image = await decodeImage(file);
+        if (revision === skinEditor.textureRevision) apply(image);
+    } catch {
+        skinEditor.showMessage('Не удалось прочитать изображение');
+    }
+}
+
+function handleSkinLoad(event) {
+    return withImage(event, image => {
+        const {width, height} = image;
+        const cape = skinEditor.workMode === 'cape';
+        if (![64, 1024].includes(width) || height !== (cape ? width / 2 : width)) {
+            skinEditor.showMessage(cape ? 'Размер плаща должен быть 64×32 или 1024×512' :
+                'Размер скина должен быть 64×64 или 1024×1024');
+            return;
         }
-        
-        if (validSize) {
-            // Создаем canvas для загрузки
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = img.width;
-            tempCanvas.height = img.height;
-            const tempCtx = tempCanvas.getContext('2d');
-            
-            tempCtx.drawImage(img, 0, 0);
-            skinEditor.currentSkin = tempCtx.getImageData(0, 0, img.width, img.height);
-            
-            // Обновляем размер canvas
-            if (skinEditor.workMode === 'cape') {
-                skinEditor.canvas.width = 320;
-                skinEditor.canvas.height = 160;
-            } else {
-                skinEditor.canvas.width = 320;
-                skinEditor.canvas.height = 320;
-            }
-            
-            skinEditor.updateDisplay();
-            skinEditor.setupPartsInterface();
-            
-            const itemType = skinEditor.workMode === 'cape' ? 'Плащ' : 'Скин';
-            skinEditor.showMessage(`${itemType} загружен успешно`);
-        } else {
-            const expectedSizes = skinEditor.workMode === 'cape' ? 
-                '64x32 или 1024x512' : '64x64 или 1024x1024';
-            skinEditor.showMessage(`${skinEditor.workMode === 'cape' ? 'Плащ' : 'Скин'} должен быть ${expectedSizes}`);
-        }
-    };
-    img.src = URL.createObjectURL(file);
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(image, 0, 0);
+        skinEditor.setTexture(ctx.getImageData(0, 0, width, height));
+        skinEditor.showMessage(cape ? 'Плащ загружен' : 'Скин загружен');
+    });
 }
 
 function saveSkin() {
@@ -984,138 +827,92 @@ function saveSkin() {
 }
 
 function createNewSkin() {
-    skinEditor.createNewSkin();
-    skinEditor.showMessage('Создан новый скин');
+    if (confirm('Заменить текущую текстуру пустой?')) skinEditor.createNewSkin();
 }
 
-function selectSize(size) {
-    document.querySelectorAll('.size-option').forEach(opt => opt.classList.remove('selected'));
-    
-    // Находим кнопку по тексту
-    const buttons = document.querySelectorAll('.size-option');
-    buttons.forEach(btn => {
-        if ((size === '64' && btn.textContent.includes('64x64')) ||
-            (size === '1024' && btn.textContent.includes('1024x1024'))) {
-            btn.classList.add('selected');
-        }
-    });
-    
-    skinEditor.skinSize = parseInt(size);
-    skinEditor.createNewSkin();
+function selectSize(value) {
+    const size = Number(value);
+    if (size === skinEditor.skinSize) return;
+    const texture = skinEditor.textureCanvas();
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size * texture.height / texture.width;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(texture, 0, 0, canvas.width, canvas.height);
+    skinEditor.setTexture(ctx.getImageData(0, 0, canvas.width, canvas.height));
 }
 
 function loadImage() {
-    document.getElementById('imageFileInput').click();
+    if (skinEditor.selectedRegions().length) document.querySelector('#imageFileInput').click();
 }
 
 function handleImageLoad(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    const img = new Image();
-    img.onload = function() {
-        skinEditor.applyImageToParts(img);
-    };
-    img.src = URL.createObjectURL(file);
+    return withImage(event, image => skinEditor.applyImageToParts(image));
+}
+
+async function loadPool(event) {
+    const files = Array.from(event.target.files);
+    event.target.value = '';
+    if (!files.length) return;
+    const request = skinEditor.poolRequest = {};
+    const results = await Promise.allSettled(files.map(decodeImage));
+    if (skinEditor.poolRequest !== request) return;
+    skinEditor.imagePool = results.filter(result => result.status === 'fulfilled').map(result => result.value);
+    skinEditor.showMessage(`Изображений в пуле: ${skinEditor.imagePool.length} из ${files.length}`);
+}
+
+function randomizePool() {
+    const pool = skinEditor.imagePool;
+    if (!pool.length) {
+        skinEditor.showMessage('Сначала загрузите пул изображений');
+        return;
+    }
+    const regions = skinEditor.selectedRegions();
+    if (!regions.length) return;
+    skinEditor.paintRegions(ctx => {
+        for (const [x1, y1, x2, y2] of regions) {
+            const image = pool[Math.floor(Math.random() * pool.length)];
+            ctx.drawImage(image, x1, y1, x2 - x1, y2 - y1);
+        }
+    });
+    skinEditor.showMessage(`Обновлено граней из пула: ${regions.length}`);
 }
 
 function clearSelected() {
-    if (skinEditor.selectedParts.size === 0) {
-        skinEditor.showMessage('Нет выбранных частей для очистки');
-        return;
-    }
-    
-    // Очищаем выбранные части
-    for (const partId of skinEditor.selectedParts) {
-        const scaledRegion = skinEditor.getScaledRegion(partId);
-        if (!scaledRegion) continue;
-        
-        const [x1, y1, x2, y2] = scaledRegion;
-        
-        // Заполняем прозрачным цветом
-        for (let y = y1; y < y2; y++) {
-            for (let x = x1; x < x2; x++) {
-                const index = (y * skinEditor.currentSkin.width + x) * 4;
-                if (index < skinEditor.currentSkin.data.length) {
-                    skinEditor.currentSkin.data[index] = 0;
-                    skinEditor.currentSkin.data[index + 1] = 0;
-                    skinEditor.currentSkin.data[index + 2] = 0;
-                    skinEditor.currentSkin.data[index + 3] = 0;
-                }
-            }
-        }
-    }
-    
-    skinEditor.updateDisplay();
-    skinEditor.showMessage(`Очищено ${skinEditor.selectedParts.size} частей`);
+    const regions = skinEditor.selectedRegions();
+    if (!regions.length) return;
+    skinEditor.paintRegions(ctx => {
+        for (const [x1, y1, x2, y2] of regions) ctx.clearRect(x1, y1, x2 - x1, y2 - y1);
+    });
+    skinEditor.showMessage(`Очищено граней: ${regions.length}`);
 }
 
-function selectMainLayer() {
-    skinEditor.selectMainLayer();
-}
-
-function selectOverlayLayer() {
-    skinEditor.selectOverlayLayer();
-}
-
-function clearSelection() {
-    skinEditor.clearSelection();
-}
+function selectMainLayer() { skinEditor.selectMainLayer(); }
+function selectOverlayLayer() { skinEditor.selectOverlayLayer(); }
+function clearSelection() { skinEditor.clearSelection(); }
+function selectAllParts() { skinEditor.selectAllParts(); }
 
 function selectWorkMode(mode) {
-    document.querySelectorAll('.mode-option').forEach(opt => opt.classList.remove('selected'));
-    
-    // Находим кнопку по режиму
-    const buttons = document.querySelectorAll('.mode-option');
-    buttons.forEach(btn => {
-        if ((mode === 'skin' && btn.textContent.includes('Скин')) ||
-            (mode === 'cape' && btn.textContent.includes('Плащ'))) {
-            btn.classList.add('selected');
-        }
-    });
-    
+    if (skinEditor.workMode === mode) return;
     skinEditor.workMode = mode;
     skinEditor.selectedParts.clear();
-    skinEditor.createNewSkin();
-    skinEditor.showMessage(`Переключен режим: ${mode === 'skin' ? 'Скин' : 'Плащ'}`);
-}
-
-function selectAllParts() {
-    skinEditor.selectAllParts();
+    const texture = skinEditor.textures[mode];
+    if (texture) {
+        skinEditor.setTexture(texture);
+        skinEditor.setupPartsInterface();
+    } else {
+        skinEditor.createNewSkin();
+    }
 }
 
 function selectMode(mode) {
-    document.querySelectorAll('#parts .mode-option').forEach(opt => opt.classList.remove('selected'));
-    
-    // Находим кнопку по режиму в секции частей
-    const buttons = document.querySelectorAll('#parts .mode-option');
-    buttons.forEach(btn => {
-        if ((mode === 'individual' && btn.textContent.includes('Отдельно')) ||
-            (mode === 'stretch' && btn.textContent.includes('Растянуть'))) {
-            btn.classList.add('selected');
-        }
-    });
-    
+    for (const button of document.querySelectorAll('[data-apply-mode]')) {
+        button.classList.toggle('selected', button.dataset.applyMode === mode);
+    }
     skinEditor.applyMode = mode;
 }
 
-function generate3DPreview() {
-    skinEditor.generate3DPreview();
-}
-
-function rotatePreview() {
-    skinEditor.rotatePreview();
-}
-
-function resetPreview() {
-    skinEditor.resetPreview();
-}
-
-function toggleAnimation() {
-    // Placeholder for animation toggle
-    skinEditor.showMessage('Анимация пока не поддерживается');
-}
-
-function resetCamera() {
-    skinEditor.resetPreview();
-}
+function generate3DPreview() { skinEditor.generate3DPreview(); }
+function rotatePreview() { skinEditor.rotatePreview(); }
+function resetPreview() { skinEditor.resetPreview(); }

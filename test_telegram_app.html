@@ -1,244 +1,71 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test Telegram Skin Editor</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-            background: #f0f0f0;
-        }
-        .test-container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .test-section {
-            margin-bottom: 30px;
-            padding: 15px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-        }
-        .test-section h3 {
-            margin-top: 0;
-            color: #333;
-        }
-        button {
-            padding: 10px 15px;
-            margin: 5px;
-            border: none;
-            border-radius: 5px;
-            background: #007AFF;
-            color: white;
-            cursor: pointer;
-        }
-        button:hover {
-            background: #0056CC;
-        }
-        .status {
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 5px;
-        }
-        .success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        .info {
-            background: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
-        }
-    </style>
+    <meta charset="utf-8">
+    <title>Проверка редактора скинов</title>
 </head>
 <body>
-    <div class="test-container">
-        <h1>🧪 Тест Telegram Skin Editor</h1>
-        
-        <div class="test-section">
-            <h3>📊 Статус инициализации</h3>
-            <div id="initStatus" class="status info">Инициализация...</div>
-        </div>
-        
-        <div class="test-section">
-            <h3>🎮 Основные функции</h3>
-            <button onclick="testCreateSkin()">Создать новый скин</button>
-            <button onclick="testCreateCape()">Создать новый плащ</button>
-            <button onclick="testSelectParts()">Выбрать части</button>
-            <button onclick="testGenerate3D()">Создать 3D превью</button>
-            <div id="functionsStatus" class="status info">Готов к тестированию</div>
-        </div>
-        
-        <div class="test-section">
-            <h3>👁️ Превью</h3>
-            <canvas id="testPreview" width="280" height="320" style="border: 1px solid #ccc; background: white;"></canvas>
-            <div id="previewStatus" class="status info">Превью не создано</div>
-        </div>
-        
-        <div class="test-section">
-            <h3>📝 Лог</h3>
-            <div id="testLog" style="background: #f8f9fa; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px; max-height: 200px; overflow-y: auto;"></div>
-        </div>
-    </div>
-
-    <script>
-        // Перехватываем console.log для отображения в интерфейсе
-        const originalLog = console.log;
-        const originalError = console.error;
-        
-        function addToLog(message, type = 'info') {
-            const logDiv = document.getElementById('testLog');
-            const timestamp = new Date().toLocaleTimeString();
-            const logEntry = document.createElement('div');
-            logEntry.style.color = type === 'error' ? 'red' : type === 'warn' ? 'orange' : 'black';
-            logEntry.textContent = `[${timestamp}] ${message}`;
-            logDiv.appendChild(logEntry);
-            logDiv.scrollTop = logDiv.scrollHeight;
-        }
-        
-        console.log = function(...args) {
-            originalLog.apply(console, args);
-            addToLog(args.join(' '), 'info');
+    <h1>Проверка редактора скинов</h1>
+    <pre id="test" role="status">Выполняется…</pre>
+    <iframe src="index.html" title="Редактор" width="720" height="640"></iframe>
+<script>
+const frame = document.querySelector('iframe');
+frame.addEventListener('load', async () => {
+    const out = document.querySelector('#test');
+    try {
+        const check = (ok, label) => { if (!ok) throw Error(label); };
+        const app = frame.contentWindow;
+        const editor = app.eval('skinEditor');
+        const img = document.createElement('canvas');
+        img.width = img.height = 64;
+        const ctx = img.getContext('2d');
+        ctx.fillStyle = '#ff0000'; ctx.fillRect(0, 0, 32, 64);
+        ctx.fillStyle = '#0000ff'; ctx.fillRect(32, 0, 32, 64);
+        const file = await new Promise(resolve => img.toBlob(resolve));
+        const event = {target: {files:[file], value:''}};
+        const pix = (x,y,c=3) => editor.currentSkin.data[(y*editor.skinSize+x)*4+c];
+        editor.togglePart('head_front');
+        editor.togglePart('head_left');
+        app.selectMode('stretch');
+        await app.handleImageLoad(event);
+        check(pix(11,11,0) === 255 && pix(20,11,2) === 255 && pix(27,11) === 0, 'stretch');
+        app.selectSize(1024);
+        check(pix(176,176,0) === 255, 'resize');
+        app.selectWorkMode('cape'); app.selectSize(64);
+        check(editor.currentSkin.height === 32, 'cape size');
+        app.selectAllParts(); await app.loadPool(event); app.randomizePool();
+        check(pix(3,3) === 255, 'pool');
+        app.switchTab('preview'); app.rotatePreview();
+        check(editor.previewCtx.getImageData(0,0,280,320).data.some(Boolean), 'cape preview');
+        app.selectWorkMode('skin');
+        check(editor.skinSize === 1024 && pix(176,176,0) === 255, 'restore skin');
+        app.selectSize(64);
+        await app.handleSkinLoad(event);
+        check(pix(2,2,0) === 255, 'PNG load');
+        app.selectMainLayer(); app.clearSelected();
+        check(pix(11,11) === 0, 'clear');
+        editor.wrapImage(img);
+        check(Object.keys(editor.skinRegions).filter(id => !id.includes('_overlay')).every(id => {
+            const [x,y] = editor.getScaledRegion(id); return pix(x,y) === 255;
+        }), 'wrap');
+        app.switchTab('preview');
+        const original = editor.previewCanvas.toDataURL();
+        app.rotatePreview();
+        check(editor.previewCanvas.toDataURL() !== original, 'rotation');
+        const originalClick = app.HTMLAnchorElement.prototype.click;
+        app.HTMLAnchorElement.prototype.click = function () {
+            check(this.download === 'minecraft_skin.png' && this.href.startsWith('data:image/png;'), 'export');
+            out.dataset.download = 'yes';
         };
-        
-        console.error = function(...args) {
-            originalError.apply(console, args);
-            addToLog(args.join(' '), 'error');
-        };
-        
-        // Загружаем основной скрипт
-        const script = document.createElement('script');
-        script.src = 'telegram_skin_editor.js';
-        script.onload = function() {
-            console.log('Скрипт загружен успешно');
-            checkInitialization();
-        };
-        script.onerror = function() {
-            console.error('Ошибка загрузки скрипта');
-            updateStatus('initStatus', 'Ошибка загрузки скрипта', 'error');
-        };
-        document.head.appendChild(script);
-        
-        function updateStatus(elementId, message, type = 'info') {
-            const element = document.getElementById(elementId);
-            element.textContent = message;
-            element.className = `status ${type}`;
+        try {
+            app.saveSkin();
+        } finally {
+            app.HTMLAnchorElement.prototype.click = originalClick;
         }
-        
-        function checkInitialization() {
-            setTimeout(() => {
-                if (typeof skinEditor !== 'undefined' && skinEditor) {
-                    updateStatus('initStatus', 'Редактор инициализирован успешно', 'success');
-                    console.log('Skin editor object:', skinEditor);
-                } else {
-                    updateStatus('initStatus', 'Ошибка инициализации редактора', 'error');
-                }
-            }, 1000);
-        }
-        
-        function testCreateSkin() {
-            try {
-                if (!skinEditor) {
-                    throw new Error('Редактор не инициализирован');
-                }
-                
-                skinEditor.workMode = 'skin';
-                skinEditor.skinSize = 64;
-                skinEditor.createNewSkin();
-                
-                updateStatus('functionsStatus', 'Скин создан успешно', 'success');
-                console.log('Тест создания скина: УСПЕХ');
-            } catch (error) {
-                updateStatus('functionsStatus', 'Ошибка создания скина: ' + error.message, 'error');
-                console.error('Тест создания скина: ОШИБКА', error);
-            }
-        }
-        
-        function testCreateCape() {
-            try {
-                if (!skinEditor) {
-                    throw new Error('Редактор не инициализирован');
-                }
-                
-                skinEditor.workMode = 'cape';
-                skinEditor.skinSize = 64;
-                skinEditor.createNewSkin();
-                
-                updateStatus('functionsStatus', 'Плащ создан успешно', 'success');
-                console.log('Тест создания плаща: УСПЕХ');
-            } catch (error) {
-                updateStatus('functionsStatus', 'Ошибка создания плаща: ' + error.message, 'error');
-                console.error('Тест создания плаща: ОШИБКА', error);
-            }
-        }
-        
-        function testSelectParts() {
-            try {
-                if (!skinEditor) {
-                    throw new Error('Редактор не инициализирован');
-                }
-                
-                skinEditor.selectAllParts();
-                
-                updateStatus('functionsStatus', `Выбрано частей: ${skinEditor.selectedParts.size}`, 'success');
-                console.log('Тест выбора частей: УСПЕХ, выбрано:', skinEditor.selectedParts.size);
-            } catch (error) {
-                updateStatus('functionsStatus', 'Ошибка выбора частей: ' + error.message, 'error');
-                console.error('Тест выбора частей: ОШИБКА', error);
-            }
-        }
-        
-        function testGenerate3D() {
-            try {
-                if (!skinEditor) {
-                    throw new Error('Редактор не инициализирован');
-                }
-                
-                // Устанавливаем тестовый canvas
-                const testCanvas = document.getElementById('testPreview');
-                skinEditor.previewCanvas = testCanvas;
-                skinEditor.previewCtx = testCanvas.getContext('2d');
-                
-                // Создаем простой тестовый скин с цветными пикселями
-                if (skinEditor.workMode === 'skin') {
-                    // Добавляем цвет на лицо
-                    const faceRegion = skinEditor.getScaledRegion('head_front');
-                    if (faceRegion) {
-                        const [x1, y1, x2, y2] = faceRegion;
-                        for (let y = y1; y < y2; y++) {
-                            for (let x = x1; x < x2; x++) {
-                                const index = (y * skinEditor.currentSkin.width + x) * 4;
-                                if (index < skinEditor.currentSkin.data.length) {
-                                    skinEditor.currentSkin.data[index] = 255;     // R
-                                    skinEditor.currentSkin.data[index + 1] = 200; // G
-                                    skinEditor.currentSkin.data[index + 2] = 150; // B
-                                    skinEditor.currentSkin.data[index + 3] = 255; // A
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                skinEditor.generate3DPreview();
-                
-                updateStatus('previewStatus', '3D превью создано успешно', 'success');
-                console.log('Тест 3D превью: УСПЕХ');
-            } catch (error) {
-                updateStatus('previewStatus', 'Ошибка создания 3D превью: ' + error.message, 'error');
-                console.error('Тест 3D превью: ОШИБКА', error);
-            }
-        }
-    </script>
+        check(out.dataset.download === 'yes', 'download action');
+        out.textContent = 'PASS';
+    } catch (e) { out.textContent = 'FAIL: '+e.stack; }
+});
+</script>
 </body>
 </html>
